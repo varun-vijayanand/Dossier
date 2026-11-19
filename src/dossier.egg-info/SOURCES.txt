@@ -1,7 +1,0 @@
-pyproject.toml
-src/dossier/__init__.py
-src/dossier.egg-info/PKG-INFO
-src/dossier.egg-info/SOURCES.txt
-src/dossier.egg-info/dependency_links.txt
-src/dossier.egg-info/requires.txt
-src/dossier.egg-info/top_level.txt
