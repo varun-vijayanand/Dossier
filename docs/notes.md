@@ -65,4 +65,30 @@ Without this, settings get scattered as `os.getenv` calls and hardcoded strings.
 
 ---
 
-*Block 3 notes (Postgres with pgvector in Docker) will be added here once it is complete.*
+
+## Block 3: Postgres with pgvector in Docker
+
+### What we did
+Started a Postgres database inside Docker, with the pgvector add-on for storing and comparing vectors. Wrote a small helper that opens a connection from Python, and two tests that prove the connection works and that vector distance works.
+
+### Why
+The design keeps everything in one database: the alert data, the agent's saved state, and the vectors for searching typology documents. Docker gives me a disposable, repeatable database without installing Postgres on my Mac. The tests prove the whole chain works before I build tables on top of it.
+
+### Key ideas
+- **Image, container, volume:** an image is the packaged recipe, a container is a running copy of it, and a volume is where the data is stored so it survives when the container is removed.
+- **Docker Compose:** one file (`infra/docker-compose.yml`) describes the setup, so one command starts everything the same way every time.
+- **Healthcheck and `--wait`:** "running" does not mean "ready". The healthcheck asks Postgres if it can take connections, and `up -d --wait` waits for a yes. My first `psql` call failed because I ran it too early.
+- **Port mapping (`5433:5432`):** the number on the left is the port on my Mac, the number on the right is the port inside the container. I changed only the left side.
+- **Compose project name (`name: dossier`):** Compose labels what it creates with this name. If I rename it, the old resources stay behind under the old name and need `docker compose -p oldname down`.
+- **pgvector:** adds a vector type and distance operators. The `<->` operator gives the straight-line distance between two vectors, which is what similarity search uses later for RAG.
+- **Connection helper (`db.py`):** the one place in the code that knows how to open a database connection, using the validated settings from Block 2.
+- **Integration tests:** tests that need a real service running. They carry an `integration` marker, so I can run only the fast tests with `-m "not integration"`.
+- **`&&` chaining:** a step only runs if the one before it passed.
+
+### What went wrong and what I learned
+- **Two databases on port 5432:** my Mac already ran a Homebrew Postgres. Python connecting to `localhost` reached that one, which had no `dossier` user. Testing from inside the container (`docker exec`) worked, but that does not test the route from my Mac. Lesson: test the same route the real code will use. `lsof -nP -iTCP:5432 -sTCP:LISTEN` shows who is listening on a port.
+- **Skipped is not passed:** the tests were skipped, hiding the real error. Putting the error text in the skip message exposed it. Lesson: a skip needs a reason you can read.
+- **`import dossier` kept failing:** `pip list` said the package was installed, but Python could not import it. The cause was a macOS "hidden" flag on the venv files, which Python skips for the link file. Fixes: `chflags -R nohidden .venv`, and `pythonpath = ["src"]` in the pytest settings as a safety net. Lesson: test the real thing (`python -c "import dossier"`), not just the package list.
+- **The terminal stuck on `~` and `(END)`:** that was a pager. Press `q` to leave it, or use `-P pager=off`.
+- **Docker command not found:** an old terminal tab had not picked up the new PATH. Opening a new tab fixed it.
+- **`git status` columns:** a leading space before `M` means "changed but not staged". I staged by name and missed a file. Lesson: read the status output again before every commit.

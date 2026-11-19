@@ -65,3 +65,15 @@ Open issues:
 3. The two integration tests currently skip. They must show as passed before Block 3 is called complete.
 
 Next up: finish Block 3, then Block 4 (database schema and migrations), Block 5 (load the IBM AML data), Block 6 (synthetic KYC), Block 7 (rule engine and alerts), then the MCP server.
+
+### 2026-11-19: Block 3 complete (Postgres with pgvector in Docker)
+
+- The database runs in Docker: image pgvector/pgvector:pg17, compose project name dossier, container dossier-db, volume dossier_dossier_pgdata. From my Mac it is at localhost:5433 (host port 5433 maps to container port 5432).
+- The Homebrew postgresql@16 still runs on port 5432, so Dossier avoids that port.
+- Code added: src/dossier/common/db.py (connect helper) and tests/integration/test_db.py (connection test and a pgvector distance test).
+- Results: 7 tests pass (5 unit, 2 integration). ruff and mypy are clean.
+- Commits: 49ecf14 (db helper, made before tests were green), 234a72f (port 5433 and pytest src path), plus the .env.example commit.
+- Start the database: docker compose -f infra/docker-compose.yml up -d --wait
+- Stop it and keep the data: docker compose -f infra/docker-compose.yml down. Add -v only to delete all data.
+- Known issue, checked after a reinstall: the macOS "hidden" flag on venv files can make Python skip the editable-install link. Fix: chflags -R nohidden .venv. Safety net: pythonpath = ["src"] in the pytest settings. The flag did not return after a reinstall.
+- Next up: Block 4, the database schema and migrations.
