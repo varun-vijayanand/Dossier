@@ -3,7 +3,7 @@ name = "dossier"
 version = "0.1.0"
 description = "AML alert investigation agent"
 requires-python = ">=3.11"
-dependencies = ["pydantic>=2", "pydantic-settings>=2"]
+dependencies = ["pydantic>=2", "pydantic-settings>=2", "psycopg[binary]>=3.2", "pgvector>=0.3"]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "mypy"]
@@ -20,3 +20,4 @@ line-length = 100
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["integration: tests that need the local Postgres container"]
