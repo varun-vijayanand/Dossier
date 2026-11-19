@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     )
 
     environment: str = "local"
-    database_url: str = "postgresql://dossier:dossier@localhost:5432/dossier"
+    database_url: str = "postgresql://dossier:dossier@localhost:5433/dossier"
     anthropic_api_key: SecretStr | None = None
 
     model_triage: str = "claude-haiku-5-5"

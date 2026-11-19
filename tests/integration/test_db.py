@@ -12,8 +12,8 @@ pytestmark = pytest.mark.integration
 def conn() -> Iterator[psycopg.Connection]:
     try:
         c = connect(timeout=3)
-    except psycopg.OperationalError:
-        pytest.skip("Postgres is not running")
+    except psycopg.OperationalError as exc:
+        pytest.skip(f"Postgres not reachable: {exc}")
     with c:
         yield c
 
