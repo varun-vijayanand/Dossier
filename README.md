@@ -155,10 +155,3 @@ Design documents (product requirements, technical design, evaluation plan, secur
 
 Conventional commit prefixes (`feat:`, `fix:`, `chore:`, `docs:`, `test:`), small commits, and green checks before every commit.
 
-## License
-
-No license has been chosen yet. Add a `LICENSE` file before making the repository public.
-
-## Author
-
-*Your name, with links to your LinkedIn and GitHub.*
