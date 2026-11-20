@@ -92,3 +92,40 @@ The design keeps everything in one database: the alert data, the agent's saved s
 - **The terminal stuck on `~` and `(END)`:** that was a pager. Press `q` to leave it, or use `-P pager=off`.
 - **Docker command not found:** an old terminal tab had not picked up the new PATH. Opening a new tab fixed it.
 - **`git status` columns:** a leading space before `M` means "changed but not staged". I staged by name and missed a file. Lesson: read the status output again before every commit.
+
+## Block 4: database schema and migrations
+
+### What we did
+We gave the database a blueprint that lives in code, and a tool to apply it. The tool is Alembic. The blueprint is migration `0001`, which switches on pgvector and creates two empty tables: `accounts` and `transactions`.
+
+### Why
+- **Migrations instead of typing `CREATE TABLE` by hand.** Typed commands leave no record. If I delete the Docker volume, set up a new Mac, or deploy to Azure, one command (`alembic upgrade head`) rebuilds the exact same database.
+- **Plain SQL, no ORM.** I write the SQL myself, so pgvector columns and extensions stay simple and I can see exactly what runs.
+- **Undo works.** I ran `downgrade base` and then `upgrade head` and got the same tables back. A recipe that has never been undone can't be trusted, and the tables were empty, so it cost nothing. Never repeat this once real data is loaded: the downgrade deletes it.
+- **Tests for the schema.** If someone changes a table and forgets to run the migration, a test fails now instead of the app failing later.
+
+### Why these design choices
+- **`numeric(24,4)` for money.** It is exact. Floats can drift when you add them up.
+- **`timestamp` without a time zone.** As far as I know the IBM data has no zone, and I didn't want to invent one.
+- **`is_laundering` is the answer key.** It is the ground truth from the synthetic data. I use it to grade Dossier. The agent must never be able to read it, or it would be cheating on its own test. I will enforce that in the MCP server block.
+- **No indexes and no foreign keys yet.** Loading millions of rows into an already-indexed table is much slower, so indexes come after the load in a later migration.
+- **Composite primary key on `accounts`.** A transaction names a bank and an account, so the pair `(bank_id, account_number)` is the safest identity until I have seen the real data.
+
+### How Alembic connects to my settings
+`migrations/env.py` calls `get_settings()` for the database URL. My URL starts with `postgresql://`, but SQLAlchemy would then look for the old `psycopg2` driver, so `env.py` rewrites it to `postgresql+psycopg://` in memory. `.env` and `config.py` are untouched, and no password is stored in any Alembic file.
+
+### What went wrong and what I learned
+1. **`import dossier` failed inside Alembic.** The macOS `hidden` flag was back on the `.pth` file that links my package into the venv. Python skips hidden `.pth` files. Fix: `chflags -R nohidden .venv`.
+2. **The flag came back by itself.** It returned without a reinstall, so my earlier note that it "did not return" was wrong. I suspect iCloud Desktop sync but have not confirmed it.
+3. **A safety net.** I added `prepend_sys_path = .:src` to `alembic.ini` (pytest already had its own `pythonpath = ["src"]`). I proved it works by hiding the `.pth` file on purpose: plain Python failed to import `dossier`, but Alembic still ran.
+4. **Wrong mypy command.** The mentor suggested `mypy .`, which also checks the tests and showed 5 errors in `tests/unit/test_config.py`. My real command is `mypy src`. The errors come from mypy not understanding pydantic settings without its plugin (with the plugin they all disappear). So my tests have never been type-checked. Adding the pydantic plugin to `pyproject.toml` and checking tests too is an optional cleanup.
+5. **Skipped is not passed.** When Docker Desktop was off, the 2 integration tests showed `skipped`. A block is only complete when they show as passed.
+6. **I missed a file.** `migrations/README` was left out of the first commit, so I added it separately. Lesson: read the `ls` and `git status --short` output before committing.
+
+### Where this fits in the whole project
+Every later block sits on this one. Block 5 loads the IBM data into these tables. Block 6 adds KYC tables as migration `0002` and later. Block 7 reads the transactions to produce alerts. The MCP server and the agent gather evidence by querying these tables, and RAG uses the pgvector extension. For the Mastercard role, a repo that builds its own database from versioned, tested migrations looks like production engineering and not a notebook.
+
+### Things to remember
+- The columns are written from the mentor's memory of the IBM dataset. Block 5 must check them against the real CSV. If they differ, add `0002`. Never edit `0001`.
+- Start Docker Desktop before running tests.
+- Check iCloud "Desktop & Documents Folders" before Block 5, and move the project to `~/dev/dossier` if it is on.
