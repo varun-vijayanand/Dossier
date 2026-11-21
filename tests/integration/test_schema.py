@@ -66,3 +66,12 @@ def test_transactions_columns(conn: psycopg.Connection) -> None:
         "ORDER BY ordinal_position"
     ).fetchall()
     assert [r[0] for r in rows] == TRANSACTION_COLUMNS
+
+
+def test_lookup_indexes_exist(conn: psycopg.Connection) -> None:
+    expected = {"ix_transactions_from_account", "ix_transactions_to_account", "ix_accounts_entity"}
+    rows = conn.execute(
+        "SELECT indexname FROM pg_indexes WHERE schemaname = 'public' "
+        "AND indexname LIKE 'ix\\_%'"
+    ).fetchall()
+    assert expected <= {r[0] for r in rows}
