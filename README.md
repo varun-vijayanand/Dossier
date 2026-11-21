@@ -82,8 +82,8 @@ All services --> Langfuse (traces, cost, eval scores)
 Prerequisites: Python 3.11 or later, Docker with Compose, and Git.
 
 ```bash
-git clone <your-repo-url> dossier
-cd dossier
+git clone https://github.com/varun-vijayanand/Dossier.git
+cd Dossier
 
 python3 -m venv .venv
 source .venv/bin/activate
@@ -91,6 +91,7 @@ python -m pip install -e ".[dev]"
 
 cp .env.example .env
 docker compose -f infra/docker-compose.yml up -d --wait
+alembic upgrade head
 
 python -m pytest && ruff check . && mypy src && echo "ALL GREEN"
 ```

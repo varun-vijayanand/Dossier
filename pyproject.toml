@@ -3,7 +3,7 @@ name = "dossier"
 version = "0.1.0"
 description = "AML alert investigation agent"
 requires-python = ">=3.11"
-dependencies = ["pydantic>=2", "pydantic-settings>=2", "psycopg[binary]>=3.2", "pgvector>=0.3"]
+dependencies = ["pydantic>=2", "pydantic-settings>=2", "psycopg[binary]>=3.2", "pgvector>=0.3", "alembic>=1.16", "sqlalchemy>=2"]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "mypy"]
