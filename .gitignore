@@ -8,3 +8,7 @@ __pycache__/
 data/raw/
 data/processed/*.egg-info/
 *.egg-info/
+
+# raw datasets: large, never commit
+data/
+.DS_Store
