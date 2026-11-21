@@ -24,6 +24,8 @@ TRANSACTION_COLUMNS = [
     "payment_currency",
     "payment_format",
     "is_laundering",
+    "from_bank_id",
+    "to_bank_id",
 ]
 
 
