@@ -75,3 +75,44 @@ def test_lookup_indexes_exist(conn: psycopg.Connection) -> None:
         "AND indexname LIKE 'ix\\_%'"
     ).fetchall()
     assert expected <= {r[0] for r in rows}
+
+
+KYC_COLUMNS = [
+    "entity_id",
+    "entity_type",
+    "country",
+    "onboarding_date",
+    "last_review_date",
+    "business_activity",
+    "expected_monthly_turnover",
+    "risk_rating",
+    "pep_flag",
+    "contact_name",
+    "registered_address",
+]
+
+
+def test_kyc_tables_and_columns(conn: psycopg.Connection) -> None:
+    tables = conn.execute(
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_schema = 'public' AND table_name LIKE 'kyc\\_%'"
+    ).fetchall()
+    assert {r[0] for r in tables} == {"kyc_profiles", "kyc_profile_truth"}
+    cols = conn.execute(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND table_name = 'kyc_profiles' "
+        "ORDER BY ordinal_position"
+    ).fetchall()
+    assert [r[0] for r in cols] == KYC_COLUMNS
+
+
+def test_kyc_rejects_invalid_risk_rating(conn: psycopg.Connection) -> None:
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute(
+            "INSERT INTO kyc_profiles (entity_id, entity_type, country, onboarding_date, "
+            "last_review_date, business_activity, expected_monthly_turnover, risk_rating, "
+            "pep_flag, contact_name, registered_address) VALUES "
+            "('TEST', 'Corporation', 'Testland', '2020-01-01', '2021-01-01', 'testing', "
+            "100, 'extreme', false, 'Test Person', '1 Test Street')"
+        )
+    conn.rollback()
