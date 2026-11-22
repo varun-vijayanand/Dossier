@@ -160,3 +160,32 @@ We put the real data into the empty tables from Block 4: about 518,000 accounts 
 
 ### Where this fits in the whole project
 Block 6 adds synthetic customer (KYC) data for the entities in `accounts`. Block 7's rule engine scans these transactions to produce alerts. The MCP server then lets the agent look up one account, one entity or one time window, which is exactly what the new indexes are for.
+
+## Block 5 correction: a bug in my own schema
+
+### What happened
+When I designed the `transactions` table in Block 4, I stored money as `numeric(24,4)`: four digits after the decimal point. That is fine for dollars. But Bitcoin amounts have up to six decimals, so a payment of 0.00012345 bitcoin was stored as 0.0001, and smaller ones as 0. About 3,267 received amounts and 1,803 paid amounts were wrongly stored as exactly zero. The source file has no zero amounts at all.
+
+### How I found it
+Not by testing the load. The counts and joins all passed. I found it because one number looked wrong: the median Bitcoin exchange rate came out as exactly 0. A median of exactly zero in a currency table is not believable. Two extra queries and a quick scan of the CSV (longest decimal part: 6; zero amounts: 0) confirmed it.
+
+### The fix
+Migration 0005 widens both columns to `numeric(28,8)`. Widening a column does not bring back digits that were already rounded off, so I emptied the transactions table and loaded the CSV again with the same loader. Afterwards: zero amounts 0, and lookups are still fast (about 0.2 ms).
+
+### The new test
+A test now loads a tiny Bitcoin amount through the loader and checks that every digit comes back. If the column is ever narrowed again, the test fails.
+
+### Block 6 so far (KYC data)
+- **What KYC is:** "know your customer", the record a bank keeps about each customer (type, country, expected activity, risk rating). Dossier needs it as a baseline to judge whether a customer's transactions look normal.
+- **Two tables (migration 0004):** `kyc_profiles` is what the agent may see. `kyc_profile_truth` records which profiles were made deliberately inconsistent. It is an answer key, so the agent must never read it, just like `is_laundering`.
+- **Currency rates:** transactions are in 15 currencies and the data has no rate table, so I derived rates from the data itself (the median of amount received divided by amount paid on dollar payments) and saved them in `src/dossier/kyc/rates.py`. They are the dataset's own rates, not real-world ones. A cross-check on Bitcoin from the opposite direction gave 11,882 against 11,874 dollars per bitcoin.
+- **Self-transfers:** 591,212 transactions (11.6%) are an account paying itself. I exclude them from "turnover", because that money goes nowhere.
+- **Special entities:** `Country #1` (6,677 accounts, 91,832 transactions sent) and three similar ones look like special counterparties, not customers, so they get no profile. That is my reading of the data.
+
+### Lessons
+1. Check column types against real values, not just column names. "The headers match" only proved the names matched.
+2. A suspicious number (a median of exactly 0) is a clue. Investigate it before building on top of it.
+3. Cheap checks on the source (longest decimal part, count of zeros) catch problems that tests on the database cannot see, because the database already holds the damaged version.
+4. Reloading is a normal, safe operation when loading is scripted, the raw files are kept and the load is all-or-nothing.
+5. Commands with `cat >>` add text every time they run. Check first, or guard them, so a repeated run cannot duplicate an entry.
+6. The linter (ruff) wants `Decimal(1)` for whole numbers and `Decimal("0.8534")` for fractions. The fraction must stay a string so it is exact.

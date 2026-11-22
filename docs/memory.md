@@ -124,3 +124,26 @@ Next up: finish Block 3, then Block 4 (database schema and migrations), Block 5 
   4. The macOS hidden flag on the venv `.pth` file was clean after the rebuild outside iCloud. Still watch for it (`ls -lO .venv/lib/python3.14/site-packages | grep -iE "pth|dossier"`).
 - **Open items:** shared test fixtures in a `conftest.py` (the `conn` fixture is duplicated in two files). Optional: pydantic mypy plugin so tests can be type-checked. The five planning documents sit in the repo root and could move to `docs/`. `data/raw_old/` can be deleted.
 - **Next up:** Block 6, synthetic KYC data (customer profiles for the entities in `accounts`, as migration 0004 and later). Then Block 7 (rule engine and alerts), then the MCP server.
+
+### 2026-11-21: Block 5 correction (migration 0005) and Block 6 in progress
+
+- **Correction to the Block 5 entry:** it said migration 0001 was fine because the column names matched the CSV headers. The names matched, but the types were never checked against real values. `amount_received` and `amount_paid` were `numeric(24,4)`, and the CSV carries up to 6 decimals (Bitcoin), so small Bitcoin payments were rounded to 0: 3,267 received and 1,803 paid amounts. The source file contains no zero amounts.
+- **Fix:** migration `0005` widens both columns to `numeric(28,8)`. Widening does not restore rounded digits, so `transactions` was truncated (`TRUNCATE transactions RESTART IDENTITY`) and reloaded from the CSV with the same loader. After the reload: 5,078,345 transactions, 5,177 laundering, 0 zero amounts, index lookup about 0.2 ms. Commit 01c9cb8 (on GitHub).
+- **Regression test:** `test_small_bitcoin_amounts_keep_their_decimals` in `tests/integration/test_ingest.py`.
+- **Block 6, done so far:**
+  1. Migration `0004` (commit 077403e): `kyc_profiles` (11 columns, CHECK constraints) and `kyc_profile_truth` (evaluation-only, foreign key to profiles, ON DELETE CASCADE). Both tables are still empty. Schema tests updated.
+  2. `src/dossier/kyc/rates.py` (commit b2a7c64): conversion table for the 15 currencies in the data, `to_usd()`, 5 unit tests. Rates are the dataset's own implied rates (median of received/paid on USD-paid transactions, measured after the 0005 reload), labelled as such, not real-world rates. Bitcoin is about 11,874 dollars per bitcoin in this data. 25 tests pass.
+- **Block 6, design decisions:**
+  1. Profiles for all customer entities except 4 special ones (`Country #1`, `Country #2`, `Direct #1`, `Direct #2`). `Country #1` has 6,677 accounts at 953 banks and sent 91,832 transactions, so it looks like a special counterparty, not a customer (an interpretation, not confirmed). A lookup on them should answer "no KYC profile".
+  2. Entity types in `kyc_profiles`: Corporation, Sole Proprietorship, Partnership, Individual (134 individuals).
+  3. The generator must never read `is_laundering`. It may read transaction amounts and counts.
+  4. Per the PRD, some profiles are deliberately inconsistent with the customer's activity (proposed: about 15%, chosen by a seeded random draw). Which ones is recorded only in `kyc_profile_truth`, which the agent's database role must never read.
+  5. Expected turnover is computed in US dollars with the rates module. Self-transfers (same bank and account on both sides) are 591,212 of 5,078,345 transactions (11.6%) and are excluded from volume, because an account paying itself is not turnover.
+  6. 166,207 entities, of which 160,369 send money. Median 1 account per entity, maximum 7,820. 38% hold accounts at more than one bank. Country for a profile comes from the most common bank country among the entity's accounts. Bank names starting "Crytpo" (a typo in the source data, 14,358 accounts) are not a country. No entity is crypto-only.
+- **Lessons:**
+  1. Check column types against real values, not only names. A one-minute `awk` for the maximum decimals would have caught the Bitcoin rounding.
+  2. A suspicious statistic (a median of exactly 0) was the clue. Investigate odd numbers before building on them.
+  3. Size a column from the data, not from a guess. I guessed 8 decimals and the data said 6.
+  4. `cat >>` appends. Running an append block twice duplicates it, so check with `grep -c` first or use `grep -q ... ||` as a guard.
+  5. Ruff 0.17.5 flags `Decimal("1")` and wants `Decimal(1)` for whole numbers (rule FURB157). Decimals with a fractional part stay strings, because building them from floats would carry binary rounding error.
+- **Next up:** the entity monthly-volume percentiles (needed to design expected turnover), then the KYC generator in small blocks (seeded, so every run gives the same data), load, verify, test, commit.
