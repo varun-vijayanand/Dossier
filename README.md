@@ -67,7 +67,7 @@ All services --> Langfuse (traces, cost, eval scores)
 - [x] Typed, validated configuration with masked secrets
 - [x] Postgres with pgvector in Docker, connection helper, and integration tests
 - [x] Database schema and migrations
-- [ ] Load the public IBM synthetic AML transaction dataset
+- [x] Load the public IBM synthetic AML transaction dataset
 - [ ] Synthetic KYC data generator
 - [ ] Rule engine that raises alerts
 - [ ] MCP server (read-only tools, masking, audit log)
