@@ -9,5 +9,6 @@ data/raw/
 *.egg-info/
 
 # raw datasets: large, never commit
-data/
+data/raw_old/
+data/processed/
 .DS_Store
