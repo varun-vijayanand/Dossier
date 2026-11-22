@@ -129,3 +129,34 @@ Every later block sits on this one. Block 5 loads the IBM data into these tables
 - The columns are written from the mentor's memory of the IBM dataset. Block 5 must check them against the real CSV. If they differ, add `0002`. Never edit `0001`.
 - Start Docker Desktop before running tests.
 - Check iCloud "Desktop & Documents Folders" before Block 5, and move the project to `~/dev/dossier` if it is on.
+
+## Block 5: loading the IBM data
+
+### What we did
+We put the real data into the empty tables from Block 4: about 518,000 accounts and 5.08 million transactions. Then we fixed a mismatch in the bank codes and added indexes so lookups are fast.
+
+### Why, step by step
+- **Check the files before loading.** My first download had the wrong contents under the wrong names. Counting lines and reading the first line of each file caught it in a minute. Loading the wrong file would have wasted an evening.
+- **COPY instead of INSERT.** COPY is Postgres's bulk-load command. The loader reads the CSV one line at a time and streams it in, so a 454 MB file never sits in memory. It is far faster than millions of separate INSERT statements.
+- **Safe to run twice.** The loader refuses to run if the table already has rows, and the whole load is one transaction, so a failure leaves the table empty instead of half full.
+- **Test with a join before building on the data.** The first join between transactions and accounts matched nothing at all. The cause: the transactions file writes bank codes like `010` and the accounts file writes `10`. Both are the same bank.
+- **The fix keeps the original.** I did not edit the loaded values. Migration 0002 adds two generated columns with the zeros trimmed, and the raw columns stay as delivered (good for audit). Postgres keeps the new columns in step automatically.
+- **Check that the fix was safe.** Trimming could in theory merge two different banks. It did not: the 58 merged codes were the same bank written with different padding, and the trimmed codes match the accounts file's 30,470 bank ids one to one.
+- **Indexes after the load.** Building them after loading is much faster than maintaining them during it. A typical account lookup went from 283 ms (reading all 5 million rows) to 0.56 ms (reading about 20 index entries). The price is about 400 MB of disk.
+
+### Things the data taught me
+- Account numbers repeat across banks, so always use bank id AND account number together.
+- Several bank ids share a bank name (30,470 ids, 20,053 names), so never group or join on name.
+- `is_laundering` is the answer key. The agent must never see it.
+- One account sent about 168,000 transactions. A tool that returns all of an account's rows would flood the model. Tools should return summaries and capped pages.
+- The patterns file (370 patterns, 8 types) is answer-key data too. I deliberately did not load it yet. It has no transaction ids, so matching it to the database needs care. It goes in the evaluation block, in tables the agent cannot read.
+
+### What went wrong and what I learned
+1. **Mislabelled download.** Check files by size, line count and first line before using them.
+2. **Zero-padded bank codes.** Test a join early. It found the problem before any code depended on it.
+3. **A missed dependency.** alembic and sqlalchemy were installed but not declared in `pyproject.toml`. Declare packages the same day you install them, and test with a fresh venv.
+4. **iCloud and the Desktop folder.** The project now lives in `~/dev/dossier`, outside iCloud. The venv hidden-flag problem has not returned since.
+5. **A wrong suggestion of mine, caught by checking.** An assumption in a command was wrong more than once (a file name, a mypy command, a README line). Reading real output before acting kept it harmless.
+
+### Where this fits in the whole project
+Block 6 adds synthetic customer (KYC) data for the entities in `accounts`. Block 7's rule engine scans these transactions to produce alerts. The MCP server then lets the agent look up one account, one entity or one time window, which is exactly what the new indexes are for.
