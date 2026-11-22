@@ -100,6 +100,28 @@ The database listens on `localhost:5433` (host port 5433 maps to Postgres's 5432
 
 Integration tests need the database running. If it is not reachable, they skip and print the reason.
 
+## Load the data
+
+The IBM synthetic AML dataset is public but not redistributed here. From the Kaggle dataset "IBM Transactions for Anti Money Laundering (AML)", download the three HI-Small files into `data/raw/`:
+
+- `HI-Small_Trans.csv` (about 454 MB, 5,078,346 lines including the header)
+- `HI-Small_accounts.csv` (about 32 MB, 518,582 lines including the header)
+- `HI-Small_Patterns.txt` (laundering pattern examples, not loaded yet)
+
+Check each file before loading: the line counts above and the first line of each file. Then, with the database running and migrations applied:
+
+```bash
+python -m dossier.ingest.ibm_aml accounts
+python -m dossier.ingest.ibm_aml transactions
+```
+
+Expected result: 518,581 accounts and 5,078,345 transactions, 5,177 of them labelled as laundering. Each load refuses to run if its table already has rows, and runs as one transaction, so a failure leaves the table empty.
+
+Two rules for querying the data:
+
+- The transactions file zero-pads bank codes (`010`) and the accounts file does not (`10`). Join on the trimmed `from_bank_id` / `to_bank_id` columns together with the account number, never on the raw bank code, the account number alone, or the bank name.
+- `is_laundering` is the answer key used only for evaluation.
+
 ## Configuration
 
 Settings are read from environment variables, or from a `.env` file, with the prefix `DOSSIER_`. Copy `.env.example` to `.env` and edit it. Never commit `.env`.
@@ -121,7 +143,8 @@ The default database credentials are for local development only.
 ```
 src/dossier/
   common/       settings, database helpers
-  data/         data loading, synthetic generators, rule engine   (planned)
+  ingest/       IBM AML data loader
+  data/         synthetic generators, rule engine                 (planned)
   mcp_server/   MCP tools, resources, masking, audit              (planned)
   rag/          ingestion, retrieval, reranking                   (planned)
   agent/        LangGraph workflow and verifier                   (planned)
