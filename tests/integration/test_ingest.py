@@ -102,3 +102,14 @@ def test_load_transactions_refuses_second_run(conn: psycopg.Connection, tmp_path
     load_transactions(conn, txns)
     with pytest.raises(RuntimeError, match="already has rows"):
         load_transactions(conn, txns)
+
+
+def test_small_bitcoin_amounts_keep_their_decimals(
+    conn: psycopg.Connection, tmp_path: Path
+) -> None:
+    row = "2022/09/01 00:06,010,AAAAAAAA1,0210,BBBBBBBB2,0.00012345,Bitcoin,0.000123,Bitcoin,Bitcoin,0\n"
+    txns = tmp_path / "trans.csv"
+    txns.write_text(TRANSACTIONS_HEADER + row)
+    load_transactions(conn, txns)
+    got = conn.execute("SELECT amount_received, amount_paid FROM transactions").fetchone()
+    assert got == (Decimal("0.00012345"), Decimal("0.00012300"))
